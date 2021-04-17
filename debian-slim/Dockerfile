@@ -7,19 +7,21 @@ RUN echo "dash dash/sh boolean false" | debconf-set-selections \
 # change the apt source to mirror site
 RUN sed -ie 's|http://deb|http://ftp.jp|g' /etc/apt/sources.list
 
-RUN apt update \
-    && DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends \
+RUN apt -qq update \
+    && DEBIAN_FRONTEND=noninteractive apt -y -qq --no-install-recommends install \
         build-essential \
+        ca-certificates \
         autogen \
         autoconf \
         flex \
         bison \
         texinfo \
         libncurses5-dev \
+        file \
         wget \
         unzip \
+        perlbrew \
         zlib1g-dev \
-        ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 ARG GMP_VER=6.1.0
@@ -27,6 +29,7 @@ ARG MPFR_VER=3.1.4
 ARG MPC_VER=1.0.3
 ARG ISL_VER=0.18
 ARG GCC_VER=8.3.0
+ARG PERL_VER=5.6.2
 ARG BINUTILS_VER=2.24
 ARG NEWLIB_VER=3.1.0
 ARG GCC_MIRROR=http://ftp.tsukuba.wide.ad.jp/software/gcc
@@ -108,7 +111,12 @@ RUN mkdir -p ${RX_SRC}/isl ${RX_BUILD}/isl \
     && cd / \
     && rm -rf ${RX_SRC}/isl ${RX_BUILD}/isl
 
+# perl
+RUN perlbrew init \
+    && perlbrew install --notest perl-${PERL_VER}
+
 ARG RX_ELF_PREFIX=/usr/local/rx-elf
+ENV PATH=/root/perl5/perlbrew/perls/perl-5.6.2/bin:${RX_ELF_PREFIX}/bin:${PATH}
 
 # binutils
 ARG RX_BINUTILS_NAME=binutils_rx_${BINUTILS_VER}_2020q4
@@ -132,8 +140,6 @@ RUN mkdir -p ${RX_BUILD}/binutils \
     && make -s install-strip \
     && cd / \
     && rm -rf ${RX_SRC}/${RX_BINUTILS_NAME} ${RX_BUILD}/binutils ${RX_DL}/${RX_BINUTILS_NAME}.zip
-
-ENV PATH=${RX_ELF_PREFIX}/bin:${PATH}
 
 # gcc 1st
 ARG RX_GCC_NAME=gcc_rx_${GCC_VER}_2020q4
@@ -241,7 +247,8 @@ RUN mkdir -p ${RX_BUILD}/gcc \
     && cd / \
     && rm -rf ${RX_BUILD}/gcc
 
-RUN find /usr/local/rx-elf/lib -name "*.o" -or -name "*.a" -exec rx-elf-strip --strip-unneeded {} \;
+RUN find /usr/local/rx-elf/lib -name "*.o" -or -name "*.a" -exec rx-elf-strip --strip-unneeded {} \; \
+    && rm -rf /usr/local/rx-elf/share/man /usr/local/rx-elf/share/info
 
 FROM debian:stable-slim
 RUN apt update && \

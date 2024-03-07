@@ -1,11 +1,4 @@
-FROM debian:stable-slim as builder
-
-# change /bin/sh to bash from dash
-RUN echo "dash dash/sh boolean false" | debconf-set-selections \
-    && DEBIAN_FRONTEND=noninteractive dpkg-reconfigure -p low dash || true
-
-# change the apt source to mirror site
-RUN sed -ie 's|http://deb|http://ftp.jp|g' /etc/apt/sources.list
+FROM ubuntu:14.04 as builder
 
 RUN apt -qq update \
     && DEBIAN_FRONTEND=noninteractive apt -y -qq --no-install-recommends install \
@@ -136,20 +129,21 @@ RUN mkdir -p ${RX_BUILD}/binutils \
         --enable-plugins \
         --disable-nls \
         --disable-werror \
-    && make -s \
+    && make -s -j \
     && make -s install-strip \
     && cd / \
     && rm -rf ${RX_SRC}/${RX_BINUTILS_NAME} ${RX_BUILD}/binutils ${RX_DL}/${RX_BINUTILS_NAME}.zip
 
 # gcc 1st
-ARG RX_GCC_NAME=gcc_rx_${GCC_VER}_2020q4
-ARG RX_GCC_URL=https://llvm-gcc-renesas.com/downloads/d.php?f=rx/gcc/${GCC_VER}.202004-gnurx/${RX_GCC_NAME}.zip
+ARG RX_GCC_NAME=gcc_rx_${GCC_VER}_202311
+ARG RX_GCC_URL=https://llvm-gcc-renesas.com/downloads/d.php?s=cdn&f=rx/gcc/${GCC_VER}.202311-gnurx/gcc-${GCC_VER}.tar.gz
 RUN mkdir -p ${RX_BUILD}/gcc \
-    && wget -q -P ${RX_DL} --content-disposition ${RX_GCC_URL} \
-    && unzip -q ${RX_DL}/${RX_GCC_NAME} -d ${RX_SRC} \
+    && set -x \
+    && wget -q -O ${RX_DL}/${RX_GCC_NAME}.tar.gz ${RX_GCC_URL} \
+    && tar -xf ${RX_DL}/${RX_GCC_NAME}.tar.gz -C ${RX_SRC} \
     && cd ${RX_BUILD}/gcc \
-    && chmod -R +x ${RX_SRC}/${RX_GCC_NAME} \
-    && ${RX_SRC}/${RX_GCC_NAME}/configure \
+    && chmod +x ${RX_SRC}/gcc-${GCC_VER}/configure \
+    && ${RX_SRC}/gcc-${GCC_VER}/configure \
         --silent \
         --target=rx-elf \
         --prefix=${RX_ELF_PREFIX} \
@@ -178,7 +172,7 @@ RUN mkdir -p ${RX_BUILD}/gcc \
     && make -s -j all-gcc \
     && make -s install-gcc \
     && cd / \
-    && rm -rf ${RX_BUILD}/gcc ${RX_DL}/${RX_GCC_NAME}.zip
+    && rm -rf ${RX_BUILD}/gcc ${RX_DL}/${RX_GCC_NAME}.tar.gz
 
 ARG RX_NEWLIB_NAME=newlib_rx_${NEWLIB_VER}_2020q4
 ARG RX_NEWLIB_URL=https://llvm-gcc-renesas.com/downloads/d.php?f=rx/newlib/${GCC_VER}.202004-gnurx/${RX_NEWLIB_NAME}.zip
@@ -219,7 +213,7 @@ RUN ln ${RX_ELF_PREFIX}/rx-elf/lib/libc.a ${RX_ELF_PREFIX}/rx-elf/lib/libc_nano.
 # gcc 2nd
 RUN mkdir -p ${RX_BUILD}/gcc \
     && cd ${RX_BUILD}/gcc \
-    && ${RX_SRC}/${RX_GCC_NAME}/configure \
+    && ${RX_SRC}/gcc-${GCC_VER}/configure \
         --silent \
         --target=rx-elf \
         --prefix=${RX_ELF_PREFIX} \
@@ -250,7 +244,7 @@ RUN mkdir -p ${RX_BUILD}/gcc \
 RUN find /usr/local/rx-elf/lib -name "*.o" -or -name "*.a" -exec rx-elf-strip --strip-unneeded {} \; \
     && rm -rf /usr/local/rx-elf/share/man /usr/local/rx-elf/share/info
 
-FROM debian:stable-slim
+FROM ubuntu:14.04
 RUN apt update && \
     apt install -y --no-install-recommends \
         make \
